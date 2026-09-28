@@ -67,8 +67,7 @@ def init():
   return (
       trail,
       moon_point,
-  )  # Note: The static elements are left untouched by init()
-
+  )  
 
 # Animation update function
 def update(frame):
