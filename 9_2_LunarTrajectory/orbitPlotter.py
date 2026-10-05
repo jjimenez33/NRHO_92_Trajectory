@@ -83,7 +83,7 @@ def animate_trajectory(moon_state, sc_state=None, interval=50, title="Earth-Moon
         if has_sc:
             set_body(sc_trail, sc_point, sc_pos, frame)
 
-        days = met[frame] / 86400
+        days = met[frame] / 86400.0
         met_text.set_text(f"MET: {days:6.1f} d\n"
                           f"     {met[frame]:,.0f} s\n"
                           f"UTC: {utc[frame][:10]}")
