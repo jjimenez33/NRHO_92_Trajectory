@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import constants as c
 import numpy as np
 
-def plot_cr3bp_orbit(solRot, solNonrot):
+def plot_cr3bp_orbit(solRot, solNonrot, solInert, solLLO):
     """Plots the 3D rotating and non-rotating frame orbit for CR3BP.
 
     Parameters:
@@ -20,6 +20,16 @@ def plot_cr3bp_orbit(solRot, solNonrot):
     X_nonrot = solNonrot[:, 0]
     Y_nonrot = solNonrot[:, 1]
     Z_nonrot = solNonrot[:, 2]
+
+    # 9:2 NRHO Position Time History (Inertial Moon Centered Frame)
+    X_inert = solInert[:, 0]
+    Y_inert = solInert[:, 1]
+    Z_inert = solInert[:, 2]
+
+    # LLO Position Time History (Inertial Moon Centered Frame)
+    X_llo = solLLO[:, 0]
+    Y_llo = solLLO[:, 1]
+    Z_llo = solLLO[:, 2]
 
     # Constant m1 and m2 Rotational Frame Location
     m1_loc = [-c.mu, 0, 0]
@@ -86,5 +96,45 @@ def plot_cr3bp_orbit(solRot, solNonrot):
     set_axes_equal(ax2)
 
     ax2.legend()
+
+    # --------------------------------------------------
+    # Figure 3: Inertial Frame with origin at the Moon's center
+    # --------------------------------------------------
+    fig3 = plt.figure()
+    ax3 = fig3.add_subplot(projection="3d")
+
+    # Adding Figure Title and Labels
+    ax3.set_title("9:2 NRHO in Moon Centered Inertial Frame")
+    ax3.set_xlabel("x [ND]")
+    ax3.set_ylabel("y [ND]")
+    ax3.set_zlabel("z [ND]")
+
+    # Plotting inertial frame positions
+    ax3.plot3D(X_inert, Y_inert, Z_inert, color="green", label="Spacecraft")
+    ax3.plot3D(0, 0, 0, c="black", marker="o", label="Moon (initial)")
+
+    set_axes_equal(ax3)
+    
+    ax3.legend()
+
+    # --------------------------------------------------
+    # Figure 4: LLO Orbit in Moon Centered Inertial Frame
+    # --------------------------------------------------
+    fig4 = plt.figure()
+    ax4 = fig4.add_subplot(projection="3d")
+
+    # Adding Figure Title and Labels
+    ax4.set_title("LLO in Moon Centered Inertial Frame")
+    ax4.set_xlabel("x [ND]")
+    ax4.set_ylabel("y [ND]")
+    ax4.set_zlabel("z [ND]")
+
+    # Plotting inertial frame positions
+    ax4.plot3D(X_llo, Y_llo, Z_llo, color="green", label="Spacecraft")
+    ax4.plot3D(0, 0, 0, c="black", marker="o", label="Moon (initial)")
+
+    set_axes_equal(ax4)
+    
+    ax4.legend()
 
     plt.show()
