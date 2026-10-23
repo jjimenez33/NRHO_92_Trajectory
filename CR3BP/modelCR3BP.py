@@ -49,7 +49,7 @@ def rot2inert(state_rot, t):
 
     # Shift origin to P2 
     r = state_rot[:, :3].copy()
-    v = state_rot[:, :3].copy()
+    v = state_rot[:, :3:6].copy()
     r[:, 0] -= (1 - c.mu)
 
     # Rotation angle at each time (ws = 1 in nondimensional CR3BP)
@@ -64,14 +64,24 @@ def rot2inert(state_rot, t):
 
     # Rotation matrices Cdot_RN, shape (N, 3, 3)
     Cdot = np.zeros((N, 3, 3))
-    C[:, 0, 0] = -sa; C[:, 0, 1] = -ca
-    C[:, 1, 0] = ca; C[:, 1, 1] = -sa
+    Cdot[:, 0, 0] = -sa; Cdot[:, 0, 1] = -ca
+    Cdot[:, 1, 0] = ca; Cdot[:, 1, 1] = -sa
 
     # r_I = C * r_R; v_I = Cdot r_R + C v_R
     r_inert = np.einsum('nij, nj->ni', C, r)
     v_inert = np.einsum('nij, nj->ni', Cdot, r) + np.einsum('nij, nj->ni', C, v)
 
     return np.hstack((r_inert, v_inert))
+
+def inert2rot(state_I, t):
+    r_I, v_I = state_I[:3], state_I[3:]
+    ca, sa = np.cos(t), np.sin(t)
+    C    = np.array([[ca,-sa,0],[sa,ca,0],[0,0,1]])
+    Cdot = np.array([[-sa,-ca,0],[ca,-sa,0],[0,0,0]])
+    r_R = C.T @ r_I
+    v_R = C.T @ (v_I - Cdot @ r_R)
+    r_R[0] += (1 - c.mu)        # shift back to barycentric rotating
+    return np.hstack((r_R, v_R))
 
 def lloInert(lloParams, L):
     a, e, i, o = lloParams[0], lloParams[1], lloParams[2], lloParams[3]
@@ -97,7 +107,8 @@ def lloInert(lloParams, L):
 
     zeros = np.zeros(N)
     r_llom2 = np.array([a*cl, a*sl, zeros]) # Original paper didn't have a*sl only sl, a*sl should be correct
-    v_llom2 = np.array([-np.sqrt(c.mu2ND/a)*sl, np.sqrt(c.mu2/a)*cl, zeros])
+    vc = np.sqrt(c.mu / a) # ND
+    v_llom2 = np.array([-vc*sl, vc*cl, zeros])
 
     r_llom3 = C @ r_llom2
     v_llom3 = C @ v_llom2

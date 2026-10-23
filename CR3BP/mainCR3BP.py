@@ -3,6 +3,7 @@ import constants as c
 from scipy.integrate import odeint
 from modelCR3BP import *
 from plotterCR3BP import plot_cr3bp_orbit
+from lambertSolution import *
 
 print("Simulation Initialized")
 
@@ -43,6 +44,30 @@ solRot    = odeint(modelCR3BP_rot, state0_NU, tND)    # Position and velocity in
 solNonrot = odeint(modelCR3BP_nonrot, state0_DU, tDU) # Position and velocity in a non-rotating frame
 solInert = rot2inert(solRot, tND)
 solInert_llo = lloInert(lloParams, L_llo)
+
+# Lambert (Moon-Centered Inertial, ND)
+t0 = 0.0
+deltaT = 3.1e5 / c.TU
+t_arr = t0 + deltaT
+
+r0 = solInert[0, 0:3] 
+print(f"r0 = {r0} N.D \n")
+LLO_arr = lloInert(lloParams, [np.pi/2])[0]
+r1 = LLO_arr[0:3]
+print(f"r1 = {r1} N.D \n")
+v0, v1 = lambertSol(r0, r1, deltaT, tm=1, tol=1e-8)
+print("Solution to lambert problem \n")
+print(f"V0 = {v0} N.D")
+print(f"v1 = {v1} N.D")
+
+# Transfer initial state -> rotating frame at t0
+state_transfer0_rot = inert2rot(np.hstack((r0, v0)), t0)
+
+# LLO target -> rotating frame at arrival time
+LLO_arr_rot = inert2rot(LLO_arr, t_arr)
+r_target_rot = LLO_arr_rot[0:3] # used in F = r(tt) - r_target
+v_LLO_rot = LLO_arr_rot[3:6]    # used for dv2 = v_LLO_rot - v(tt)
+
 print("Simulation Complete")
 print(f"Jacobi Constant {C}")
 

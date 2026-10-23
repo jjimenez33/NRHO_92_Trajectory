@@ -12,7 +12,6 @@ R_EARTH = 6378.137 # Earth equatorial radius [km]
 # Moon Constants
 m2  = 7.348e22 # Moon Mass [kg]
 mu2 = G*m2 # Moon gravitational Parameter
-mu2ND = 0.012144
 R_MOON = 1737.4 # Moon mean radius [km]
 
 # Characteristic Values

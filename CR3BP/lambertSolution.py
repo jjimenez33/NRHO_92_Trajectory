@@ -14,15 +14,16 @@ def lambertSol(r0, r1, deltaT, tm, tol):
             t_m: transfer-method
                 + (short way)
                 - (long way)
+            tol: tolerance
         Returns:
             v0: initial velocity vector
             v1: final velocity vector
     """
     # Calculate square root of mu parameter
-    sqrt_mu = np.sqrt(c.mu2)
+    sqrt_mu = np.sqrt(c.mu)
 
     # Calculate the norm of position vectors
-    r0_norm = np.linalg.norn(r0)
+    r0_norm = np.linalg.norm(r0)
     r1_norm = np.linalg.norm(r1)
 
     # Calculate gamma parameter
@@ -94,8 +95,8 @@ def lambertSol(r0, r1, deltaT, tm, tol):
 
         # Update psi, c2 and c3 values
         psi = (psi_u + psi_l) / 2.0
-        c2 = c2(psi)
-        c3 = c3(psi)
+        c2 = C2(psi)
+        c3 = C3(psi)
 
     # Check if maximum steps reached
     if not solved:
@@ -106,12 +107,17 @@ def lambertSol(r0, r1, deltaT, tm, tol):
 
     # Calculate coefficients
     f = 1 - B/r0_norm
-    g = A*np.sqrt(B/c.mu2)
+    g = A*np.sqrt(B/c.mu)
     gdot = 1 - B/r1_norm
 
     # Calcualte velocity vectors
     v0 = (r1 - f*r0) / g
     v1 = (gdot*r1 - r0) / g
 
-
     return v0, v1
+
+# Stumpff function
+def C2(psi):
+    return (1-np.cos(np.sqrt(psi))) / psi
+def C3(psi):
+    return (np.sqrt(psi) - np.sin(np.sqrt(psi))) / (psi * np.sqrt(psi))
