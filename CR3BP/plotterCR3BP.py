@@ -4,7 +4,6 @@ import numpy as np
 
 def plot_cr3bp_orbit(solRot, solNonrot, solInert, solLLO):
     """Plots the 3D rotating and non-rotating frame orbit for CR3BP.
-
     Parameters:
     - solRot: array-like, trajectory solution where columns 0, 1, 2 are X, Y, Z
     positions (Non-Dimensional Units)
