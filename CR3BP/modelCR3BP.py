@@ -1,8 +1,17 @@
 import numpy as np
 import constants as c
+from scipy.integrate import solve_ivp
 
 # CR3BP Model (Rotating Frame)
 def modelCR3BP_rot(state, t):
+    """
+    Description: CR3BP Equations of Motion in the rotating frame
+                 taken from Vallado pg. 971 Eq.(12-16)
+    Inputs:
+        state  : state vector [6x1]
+    Returns:
+        dstate : derivative of state vector [6x1]
+    """
     x = state[0] 
     y = state[1] 
     z = state[2]
@@ -23,7 +32,14 @@ def modelCR3BP_rot(state, t):
 
 # CR3BP Model (non-rotating Frame)
 def modelCR3BP_nonrot(state, t):
-    # Convert initial conditions to dimensionalized units
+    """
+    Description: CR3BP dimensional equations of motion in the non-rotating 
+                 frame from Vallado pg. 971, Eq. (12-17)
+    Inputs:
+        state  : state vector [6x1]
+    Returns:
+        dstate : derivative of state vector [6x1]
+    """
     x = state[0] 
     y = state[1] 
     z = state[2] 
@@ -44,12 +60,23 @@ def modelCR3BP_nonrot(state, t):
 
 # CR3BP Model Transformation from Rotating to inertial Frame(Moon Centered Inertial Frame)
 def rot2inert(state_rot, t):
+    """
+    Description: Transformation matrix from rotating frame to inertial frame
+                 based on equations from "Transfers between Near Rectilinear 
+                 Halo Orbits and Low Lunar Orbits" by Thangavelu (2018). 
+                 Specifically Section 2
+    Inputs:
+        state_rot: state vector in rotating frame
+        t: non-dimensional time
+    Returns:
+        state_I: state vector in moon-centered rotating frame
+    """
     t = np.asarray(t)
     N = state_rot.shape[0]
 
     # Shift origin to P2 
     r = state_rot[:, :3].copy()
-    v = state_rot[:, :3:6].copy()
+    v = state_rot[:, 3:6].copy()
     r[:, 0] -= (1 - c.mu)
 
     # Rotation angle at each time (ws = 1 in nondimensional CR3BP)
@@ -84,6 +111,21 @@ def inert2rot(state_I, t):
     return np.hstack((r_R, v_R))
 
 def lloInert(lloParams, L):
+    """
+    Description: Transformation matrix from rotating frame to inertial frame
+                 based on equations from "Transfers between Near Rectilinear 
+                 Halo Orbits and Low Lunar Orbits" by Thangavelu (2018). 
+                 Specifically Section 4
+    Inputs:
+        lloParams: parameters of the llo orbit which include
+            a: semi-major axis
+            e: eccentricity
+            i: inclination
+            o: obliquity of the Moon
+        L: Mean longitude
+    Returns:
+        position and velocity vector (N.D)
+    """
     a, e, i, o = lloParams[0], lloParams[1], lloParams[2], lloParams[3]
     d2r = np.pi/180
     L = np.asarray(L)
@@ -106,14 +148,14 @@ def lloInert(lloParams, L):
     C = Ctilt @ Cinc
 
     zeros = np.zeros(N)
-    r_llom2 = np.array([a*cl, a*sl, zeros]) # Original paper didn't have a*sl only sl, a*sl should be correct
+    r_llom3 = np.array([a*cl, a*sl, zeros]) # Original paper didn't have a*sl only sl, a*sl should be correct
     vc = np.sqrt(c.mu / a) # ND
-    v_llom2 = np.array([-vc*sl, vc*cl, zeros])
+    v_llom3 = np.array([-vc*sl, vc*cl, zeros])
 
-    r_llom3 = C @ r_llom2
-    v_llom3 = C @ v_llom2
+    r_llom2 = C @ r_llom3
+    v_llom2 = C @ v_llom3
 
-    return np.hstack((r_llom3.T, v_llom3.T))
+    return np.hstack((r_llom2.T, v_llom2.T))
 
 # Jacobi constant (rotating frame, ND)
 def jacobi_constant(state):
@@ -124,3 +166,113 @@ def jacobi_constant(state):
     C = x**2 + y**2 + 2*(1-c.mu)/r1 + 2*c.mu/r2 - v**2
 
     return C
+
+# State Transition Matrix (rotating frame, ND)
+def modelCR3BP_STM(t, y):
+    """
+    Description: State Transition Matrix in the rotating frame with 
+                 ND units based on the Thungavelu paper Section 3 and 4
+    Inputs: 
+        t = time [ND]
+        y = State vector [x, y, z, vx, vy, vz, Phi(36)]
+
+    Returns:
+        dy = derivative of State vector [vx, vy, vz, ax, ay, az, dPhi(36)]
+    """
+    x, yy, z, vx, vy, vz = y[:6]
+    Phi = y[6:].reshape(6, 6)
+    mu = c.mu
+
+    # Equations of motion
+    r1 = np.sqrt((x+mu)**2 + yy**2 + z**2)
+    r2 = np.sqrt((x+mu-1)**2 + yy**2 + z**2)
+
+    ax = 2*vy + x - (1-mu)*(x+mu)/r1**3 - mu*(x-1+mu)/r2**3
+    ay = -2*vx + yy - (1-mu)*yy/r1**3 - mu*yy/r2**3
+    az = -(1-mu)*z/r1**3 - mu*z/r2**3
+ 
+    a, b = (1-mu)/r1**3, mu/r2**3
+    d1, d2 = 3*(1-mu)/r1**5, 3*mu/r2**5
+    xm, xp = x + mu, x + mu - 1
+ 
+    Uxx = 1 - a - b + d1*xm**2 + d2*xp**2
+    Uyy = 1 - a - b + d1*yy**2 + d2*yy**2
+    Uzz =   - a - b + d1*z**2  + d2*z**2
+    Uxy = d1*xm*yy + d2*xp*yy
+    Uxz = d1*xm*z  + d2*xp*z
+    Uyz = d1*yy*z  + d2*yy*z
+
+    # State Matrix from Eq (3.24, 3.25-34)
+    A = np.zeros((6, 6))
+    A[0:3, 3:6] = np.eye(3)
+    A[3:6, 0:3] = [[Uxx, Uxy, Uxz],
+                   [Uxy, Uyy, Uyz],
+                   [Uxz, Uyz, Uzz]]
+    A[3:6, 3:6] = [[0, 2, 0],
+                   [-2, 0, 0],
+                   [0, 0, 0]]
+
+    dPhi = A @ Phi
+    return np.hstack(([vx, vy, vz, ax, ay, az], dPhi.ravel()))
+
+# State with STM Propagator
+def propagate_with_STM(X0, tt):
+    """
+    Description: Propagates state with STM from 0 to tt. 
+    Inputs:
+        X0: Initial state vector 
+        tt: Transfer time of flight?
+    Returns:
+        X(tt) (6,) : State 
+        Phi(tt) : State Transition Matrix
+    """
+    y0 = np.hstack((X0, np.eye(6).ravel()))
+    sol = solve_ivp(modelCR3BP_STM, [0, tt], y0, method='DOP853',
+                    rtol=1e-12, atol=1e-12)
+    yf = sol.y[:, -1]
+    Xtt = yf[:6]
+    Phitt = yf[6:].reshape(6,6)
+    return Xtt, Phitt
+
+
+# Single Shooting Corrector (Thesis Section 4.1.4, eqs 4.7-4.9)
+# Free variables = [vx0, vy0, vz0, tt] (rotating frame)
+# Constraint F = r(tt) - r_target
+def correct_transfer(r0_rot, v_guess, tt_guess, r_target, tol, max_iter):
+    """
+    Description: Single Shooting Corrector (Thungavelu Section 4.1.4, eqs 4.7-4.9)
+    Inputs: 
+        r0_rot: Initial state vector in non dimenionsal rotating frame
+        v_guess: initial velocity vector from Lambert's Problem
+        tt_guess: Transfer time of flight guess
+        r_target: Desired position
+        tol: Tolerance
+        max_iter: Maximum iteration #
+    Return:
+        V
+        Xf
+        history
+        False
+    """
+    V = np.hstack((v_guess, tt_guess)).astype(float) # (4.7)
+    history = []
+
+    for j in range(max_iter):
+        X0 = np.hstack((r0_rot, V[0:3]))
+        Xf, Phi = propagate_with_STM(X0, V[3])
+
+        F = Xf[0:3] - r_target # (4.8)
+        history.append(np.linalg.norm(F))
+        if history[-1] < tol:
+            return V, Xf, history, True
+
+        DF = np.zeros((3, 4)) # (4.9)
+        DF[:, 0:3] = Phi[0:3, 3:6]
+        DF[:, 3] = Xf[3:6]
+
+        V = V - DF.T @ np.linalg.solve(DF @ DF.T, F) # (3.48)
+
+    return V, Xf, history, False
+
+
+    

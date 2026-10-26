@@ -136,4 +136,69 @@ def plot_cr3bp_orbit(solRot, solNonrot, solInert, solLLO):
     
     ax4.legend()
 
-    plt.show()
+def plot_transfer_frames(transfer_rot, transfer_inert, r_target_rot, r_target_inert,
+                         nrho_rot=None, nrho_inert=None, llo_inert=None, show=False):
+    """Plots the NRHO to LLO transfer side by side:
+       left  = rotating frame (barycentric, ND)
+       right = Moon centered inertial frame (ND)
+    Parameters:
+    - transfer_rot:   (N, 6) transfer state history in the rotating frame
+    - transfer_inert: (N, 6) transfer state history in the Moon centered inertial frame
+    - r_target_rot:   (3,) target position in the rotating frame
+    - r_target_inert: (3,) target position in the Moon centered inertial frame
+    - nrho_rot, nrho_inert, llo_inert: optional (N, 6) arrays for context
+    - show: call plt.show() at the end
+    """
+    def set_axes_equal(ax):
+        x_limits = ax.get_xlim3d()
+        y_limits = ax.get_ylim3d()
+        z_limits = ax.get_zlim3d()
+        x_center, y_center, z_center = np.mean(x_limits), np.mean(y_limits), np.mean(z_limits)
+        radius = 0.5 * max(x_limits[1] - x_limits[0],
+                           y_limits[1] - y_limits[0],
+                           z_limits[1] - z_limits[0])
+        ax.set_xlim3d([x_center - radius, x_center + radius])
+        ax.set_ylim3d([y_center - radius, y_center + radius])
+        ax.set_zlim3d([z_center - radius, z_center + radius])
+        ax.set_box_aspect([1, 1, 1])
+
+    fig = plt.figure(figsize=(14, 6))
+
+    # Left: Rotating Frame
+    ax_rot = fig.add_subplot(1, 2, 1, projection="3d")
+    ax_rot.set_title("Rotating Frame: NRHO to LLO Transfer")
+    ax_rot.set_xlabel("x [ND]")
+    ax_rot.set_ylabel("y [ND]")
+    ax_rot.set_zlabel("z [ND]")
+
+    if nrho_rot is not None:
+        ax_rot.plot3D(nrho_rot[:, 0], nrho_rot[:, 1], nrho_rot[:, 2],
+                      c="gray", label="NRHO")
+    ax_rot.plot3D(transfer_rot[:, 0], transfer_rot[:, 1], transfer_rot[:, 2],
+                  c="green", label="Transfer")
+    ax_rot.plot3D(1 - c.mu, 0, 0, c="black", marker="o", label="Moon")
+    ax_rot.plot3D(r_target_rot[0], r_target_rot[1], r_target_rot[2],
+                  c="red", marker="x", linestyle="None", label="Target")
+    set_axes_equal(ax_rot)
+    ax_rot.legend()
+
+    # Right: Moon Centered Inertial Frame
+    ax_inert = fig.add_subplot(1, 2, 2, projection="3d")
+    ax_inert.set_title("Moon Centered Inertial Frame: NRHO to LLO Transfer")
+    ax_inert.set_xlabel("x [ND]")
+    ax_inert.set_ylabel("y [ND]")
+    ax_inert.set_zlabel("z [ND]")
+
+    if nrho_inert is not None:
+        ax_inert.plot3D(nrho_inert[:, 0], nrho_inert[:, 1], nrho_inert[:, 2],
+                        c="gray", label="NRHO")
+    if llo_inert is not None:
+        ax_inert.plot3D(llo_inert[:, 0], llo_inert[:, 1], llo_inert[:, 2],
+                        c="blue", label="LLO")
+    ax_inert.plot3D(transfer_inert[:, 0], transfer_inert[:, 1], transfer_inert[:, 2],
+                    c="green", label="Transfer")
+    ax_inert.plot3D(0, 0, 0, c="black", marker="o", label="Moon")
+    ax_inert.plot3D(r_target_inert[0], r_target_inert[1], r_target_inert[2],
+                    c="red", marker="x", linestyle="None", label="Target")
+    set_axes_equal(ax_inert)
+    ax_inert.legend()
