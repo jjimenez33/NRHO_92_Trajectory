@@ -273,6 +273,91 @@ def correct_transfer(r0_rot, v_guess, tt_guess, r_target, tol, max_iter):
         V = V - DF.T @ np.linalg.solve(DF @ DF.T, F) # (3.48)
 
     return V, Xf, history, False
+# Helper function to obtain deltafV2
+def dv2_vector(V, Xf, LLO_arr, t0):
+    """deltaV2 = v_LLO(rotating frame at t0+tt) - v_transfer(tt)"""
+    v_LLO_rot = inert2rot(LLO_arr, t0 + V[3])[3:6]
+    return v_LLO_rot - Xf[3:6] # Equation 4.11
 
-
+# Corrections for Transfers Including deltaV Constraint (Thesis Section 4.2)
+# Free Variables [vx0, vy0, vz0, tt] (rotating frame)
+# Constraint F = [r(tt)-r_target, deltaV2-deltaV2_corrected]
+def correct_transfer_deltaV_constraint(r0_rot, v_guess, r_target, LLO_arr, t0, dv2_target, tol=1e-12, max_iter=50):
+    """
+    Description: Single Shooting Corrector with deltaV constraint (Thungavelu Section 4.2, eq 4.12)
+    Inputs:
+        r0_rot: Initial state vector in non dimenionsal rotating frame
+        v_guess: initial velocity vector from Lambert's Problem
+        tt_guess: Transfer time of flight guess
+        r_target: Desired position
+        deltaV: ????
+        tol: Tolerance
+        max_iter: Maximum iteration #
+    Return:
+        V
+        Xf
+        history 
+        False
+    """
     
+    V = np.array(v_guess, dtype=float)
+
+    for j in range(max_iter):
+        X0 = np.hstack((r0_rot, V[0:3]))
+        Xf, Phi = propagate_with_STM(X0, V[3])
+
+        dv2_vec = dv2_vector(V, Xf, LLO_arr, t0)
+        dv2_mag = np.linalg.norm(dv2_vec)
+
+        F = np.hstack((Xf[0:3] - r_target, dv2_mag - dv2_target)) # (4.12)
+        if np.linalg.norm(F) < tol:
+            return V, Xf, True
+
+        # Derivative of the deltaV2 vector with respect to tt
+        acc_final = np.array(modelCR3BP_rot(Xf, 0.0)[3:6])
+        h = 1e-6
+        vL_p = inert2rot(LLO_arr, t0 + V[3] + h)[3:6]
+        vL_m = inert2rot(LLO_arr, t0 + V[3] - h)[3:6]
+        dvLLO_dtt = (vL_p - vL_m) / (2*h)
+        d_dv2vec_dtt = dvLLO_dtt - acc_final
+
+        # Jacobian (4x4)
+        u = dv2_vec / dv2_mag # unit vector of deltaV2
+        DF = np.zeros((4,4)) # (4.9) with added deltaV2
+        DF[0:3, 0:3] = Phi[0:3, 3:6] # Position vs initial velocity
+        DF[0:3, 3] = Xf[3:6] # POsition vs tt = final velocity
+        DF[3, 0:3] = -u @ Phi[3:6, 3:6] # DeltaV2 vs initial velocity
+        DF[3, 3] = u @ d_dv2vec_dtt # deltaV2 vs tt
+
+        V = V - np.linalg.solve(DF, F) # Ordinary Newton Step
+
+    return V, Xf, False
+        
+# Continuation loop
+def dv2_continuation(r0_rot, V0, Xf0, r_target, LLO_arr, t0, v_NRHO_rot, step=1e-3, n_steps=50, min_steps=1e-6):
+    V, Xf = np.array(V0, float), Xf0
+    results = []
+
+    dv2_now = np.linalg.norm(dv2_vector(V, Xf, LLO_arr, t0))
+    dv1_now = np.linalg.norm(V[0:3] - v_NRHO_rot)
+    results.append((dv1_now, dv2_now, dv1_now + dv2_now, V[3]))
+
+    for k in range(n_steps):
+        dv2_target = dv2_now - step
+        V_new, Xf_new, ok = correct_transfer_deltaV_constraint(r0_rot, V, r_target, LLO_arr, t0, dv2_target)
+
+        if not ok:
+            step /= 2
+            if step < min_steps:
+                print("Stopping: could not converge with a small step.")
+                break
+            continue
+
+    V, Xf = V_new, Xf_new
+    dv2_now = np.linalg.norm(dv2_vector(V, Xf, LLO_arr, t0))
+    dv1_now = np.linalg.norm(V[0:3] - v_NRHO_rot)
+    results.append((dv1_now, dv2_now, dv1_now + dv2_now, V[3]))
+
+    return np.array(results) # columns: dv1, dv2, total, tt
+
+

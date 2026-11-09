@@ -112,6 +112,12 @@ print("Delta-v 2 [km/s] (x, y, z, |.|):", dv2_vec*c.VU, dv2*c.VU)
 print(f"Total Delta-v = {(dv1 + dv2)*c.VU:.4f} km/s")
 print(f"TOF = {V[3]*c.TU/3600:.1f} hr")
 
+# DeltaV Constraint
+results = dv2_continuation(state_transfer0_rot[0:3], V, Xf, r_target_rot, LLO_arr, t0, v_NRHO_rot)
+print("dv1, dv2, total [km/s], tt [hr]")
+for dv1_k, dv2_k, tot_k, tt_k in results:
+    print(f"{dv1_k*c.VU:.4f} {dv2_k*c.VU:.4f} {tot_k*c.VU:.4f} {tt_k*c.TU/3600:.1f}")
+
 # Plotting
 plot_cr3bp_orbit(solRot, solNonrot, solInert, solInert_llo)
 one_period = tND <= 1.5112     
